@@ -1,0 +1,67 @@
+# Docker Compose — Sequelize Web Stack Demo
+# CSIR EOI No. 8121/10/02/2026
+# Services: PostgreSQL, Express.js Backend, React Frontend
+
+version: '3.8'
+
+services:
+  # ─── PostgreSQL Database ──────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: sequelize_demo_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sequelize_demo
+      POSTGRES_USER: demo_user
+      POSTGRES_PASSWORD: demo_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo_user -d sequelize_demo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Express.js Backend ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sequelize_demo_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: sequelize_demo
+      DB_USER: demo_user
+      DB_PASSWORD: demo_password
+      JWT_SECRET: csir-eoi-demo-jwt-secret-2026
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "node src/seeders/seed.js && node src/server.js"
+
+  # ─── React Frontend ──────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sequelize_demo_ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:4000
+
+volumes:
+  pg_data:
+    driver: local
